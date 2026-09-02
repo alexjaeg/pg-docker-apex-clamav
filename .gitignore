@@ -7,6 +7,13 @@
 *.env.local
 .env.*.local
 
+# Private Keys & Sensitive Keystores (CRITICAL: Never commit private keys)
+*.key
+*.pem.key
+*.pfx
+*.p12
+*.jks
+
 # Session & temporary test files
 cookies.txt
 *.log

@@ -9,10 +9,47 @@ ICAP_HOST="${ICAP_HOST:-c-icap}"
 ICAP_PORT="${ICAP_PORT:-1344}"
 ORACLE_PASSWORD="${ORACLE_PWD:-Welcome12345!1}"
 APEX_PASSWORD="${APEX_PWD:-Welcome12345!2}"
+CERT_DIR="/cert"
 
 echo "================================================================="
 echo "[ORDS] Starting Oracle REST Data Services Initialization..."
 echo "================================================================="
+
+# 0. Import custom corporate certificates into OS & Java trust stores
+if [ -d "$CERT_DIR" ]; then
+    count=0
+    for cert in "$CERT_DIR"/*.crt "$CERT_DIR"/*.pem "$CERT_DIR"/*.cer; do
+        if [ -f "$cert" ]; then
+            count=$((count + 1))
+        fi
+    done
+
+    if [ "$count" -gt 0 ]; then
+        echo "[ORDS] Found $count custom certificate(s) in $CERT_DIR. Importing..."
+        # OS trust store
+        mkdir -p /etc/pki/ca-trust/source/anchors
+        for cert in "$CERT_DIR"/*.crt "$CERT_DIR"/*.pem "$CERT_DIR"/*.cer; do
+            if [ -f "$cert" ]; then
+                cp "$cert" /etc/pki/ca-trust/source/anchors/
+            fi
+        done
+        /usr/bin/update-ca-trust extract >/dev/null 2>&1 || true
+
+        # Java trust store
+        JAVA_CACERTS="${JAVA_HOME:-/opt/graalvm-ee-java17-21.3.10}/lib/security/cacerts"
+        if [ -f "$JAVA_CACERTS" ] && command -v keytool >/dev/null 2>&1; then
+            for cert in "$CERT_DIR"/*.crt "$CERT_DIR"/*.pem "$CERT_DIR"/*.cer; do
+                if [ -f "$cert" ]; then
+                    alias_name="custom-$(basename "$cert" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-')"
+                    keytool -delete -alias "$alias_name" -keystore "$JAVA_CACERTS" -storepass changeit >/dev/null 2>&1 || true
+                    keytool -importcert -noprompt -keystore "$JAVA_CACERTS" -storepass changeit -alias "$alias_name" -file "$cert" >/dev/null 2>&1 || true
+                    echo "[ORDS] Imported $(basename "$cert") into Java cacerts (alias: $alias_name)."
+                fi
+            done
+        fi
+        echo "[ORDS] OS & Java trust stores updated successfully."
+    fi
+fi
 
 mkdir -p "${CONFIG_DIR}"
 
