@@ -1,0 +1,26 @@
+# ==============================================================================
+# Git Ignore Configuration
+# ==============================================================================
+
+# Environment variables & secrets (CRITICAL: Never commit passwords to git)
+.env
+*.env.local
+.env.*.local
+
+# Session & temporary test files
+cookies.txt
+*.log
+*.tmp
+*.bak
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

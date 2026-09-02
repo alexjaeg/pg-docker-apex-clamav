@@ -1,0 +1,170 @@
+# ==============================================================================
+# Docker Compose: Oracle Database 23ai, APEX 24.2, ORDS 24.3.0, ClamAV & C-ICAP
+# All images use specific, pinned version tags (NO :latest tags).
+# ==============================================================================
+
+name: apex-clamav-stack
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. ClamAV Antivirus Daemon (Official Image)
+  # ----------------------------------------------------------------------------
+  clamav:
+    image: clamav/clamav:1.4.3
+    container_name: apex-clamav
+    restart: unless-stopped
+    ports:
+      - "${CLAMAV_PORT:-3310}:3310"
+    environment:
+      - CLAMD_CONF_LogClean=yes
+      - CLAMD_CONF_LogVerbose=yes
+    volumes:
+      - clamav_db:/var/lib/clamav
+    networks:
+      - apex-clamav-net
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'PING' | nc -w 5 localhost 3310 | grep 'PONG' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 25s
+
+  # ----------------------------------------------------------------------------
+  # 2. C-ICAP Server with SquidClamav Streaming Module (TCP INSTREAM - No Volumes)
+  # ----------------------------------------------------------------------------
+  c-icap:
+    build:
+      context: ./c-icap
+      dockerfile: Dockerfile
+    image: custom-c-icap:debian-12.9
+    container_name: apex-c-icap
+    restart: unless-stopped
+    ports:
+      - "${ICAP_PORT:-1344}:1344"
+    environment:
+      - CLAMD_HOST=clamav
+      - CLAMD_PORT=3310
+    depends_on:
+      clamav:
+        condition: service_healthy
+    networks:
+      - apex-clamav-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 1344 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 3. One-Shot Helper: Download & Extract APEX Distribution
+  # ----------------------------------------------------------------------------
+  apex-download:
+    image: debian:12.9-slim
+    container_name: apex-downloader
+    user: "0"
+    environment:
+      - APEX_DOWNLOAD_URL=${APEX_DOWNLOAD_URL:-https://download.oracle.com/otn_software/apex/apex_24.2.zip}
+    volumes:
+      - apex_files:/apex-files
+      - ./scripts/download-apex.sh:/scripts/download-apex.sh:ro
+    networks:
+      - apex-clamav-net
+    command: >
+      bash -c "
+        apt-get update -qq &&
+        apt-get install -y -qq --no-install-recommends curl unzip ca-certificates >/dev/null &&
+        bash /scripts/download-apex.sh
+      "
+
+  # ----------------------------------------------------------------------------
+  # 4. Oracle Database 23ai Free (Faststart)
+  # ----------------------------------------------------------------------------
+  db:
+    image: gvenzl/oracle-free:23.5-slim-faststart
+    container_name: apex-oracle-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-1521}:1521"
+    environment:
+      - ORACLE_PASSWORD=${ORACLE_PWD:-Welcome12345!1}
+      - APEX_PWD=${APEX_PWD:-Welcome12345!2}
+      - DEMO_WORKSPACE=${DEMO_WORKSPACE:-DEMO}
+      - DEMO_USER=${DEMO_USER:-DEMO_ADMIN}
+      - DEMO_PWD=${DEMO_PWD:-DemoPassword123!4}
+      - DEMO_EMAIL=${DEMO_EMAIL:-demo@example.com}
+    volumes:
+      - oradata:/opt/oracle/oradata
+      - ./oracle-init:/container-entrypoint-initdb.d:ro
+      - apex_files:/apex:ro
+    depends_on:
+      apex-download:
+        condition: service_completed_successfully
+    networks:
+      - apex-clamav-net
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 20s
+      timeout: 10s
+      retries: 25
+      start_period: 45s
+
+  # ----------------------------------------------------------------------------
+  # 5. Oracle REST Data Services (ORDS) & APEX Web Listener
+  # ----------------------------------------------------------------------------
+  ords:
+    image: container-registry.oracle.com/database/ords:24.3.0
+    container_name: apex-ords
+    user: "0"
+    restart: unless-stopped
+    ports:
+      - "${ORDS_PORT:-8080}:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=1521
+      - DB_SERVICE=freepdb1
+      - ICAP_HOST=c-icap
+      - ICAP_PORT=1344
+      - ORACLE_PWD=${ORACLE_PWD:-Welcome12345!1}
+      - APEX_PWD=${APEX_PWD:-Welcome12345!2}
+    volumes:
+      - ords_config:/etc/ords/config
+      - apex_files:/opt/oracle/apex:ro
+      - ./scripts/ords-entrypoint.sh:/ords-entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/ords-entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+      c-icap:
+        condition: service_healthy
+      apex-download:
+        condition: service_completed_successfully
+    networks:
+      - apex-clamav-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ords/ || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+# ------------------------------------------------------------------------------
+# Persistent Storage Volumes
+# ------------------------------------------------------------------------------
+volumes:
+  clamav_db:
+    name: apex_clamav_db
+  apex_files:
+    name: apex_software_files
+  oradata:
+    name: apex_oracle_oradata
+  ords_config:
+    name: apex_ords_config
+
+# ------------------------------------------------------------------------------
+# Isolated Network
+# ------------------------------------------------------------------------------
+networks:
+  apex-clamav-net:
+    name: apex_clamav_network
+    driver: bridge
