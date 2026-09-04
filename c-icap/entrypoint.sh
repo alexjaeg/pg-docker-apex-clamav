@@ -3,6 +3,29 @@ set -e
 
 CLAMD_HOST="${CLAMD_HOST:-clamav}"
 CLAMD_PORT="${CLAMD_PORT:-3310}"
+CERT_DIR="/cert"
+
+# 0. Import custom corporate certificates into system trust store
+if [ -d "$CERT_DIR" ]; then
+    count=0
+    for cert in "$CERT_DIR"/*.crt "$CERT_DIR"/*.pem "$CERT_DIR"/*.cer; do
+        if [ -f "$cert" ]; then
+            count=$((count + 1))
+        fi
+    done
+
+    if [ "$count" -gt 0 ]; then
+        echo "[C-ICAP] Found $count custom certificate(s) in $CERT_DIR. Importing..."
+        mkdir -p /usr/local/share/ca-certificates/custom
+        for cert in "$CERT_DIR"/*.crt "$CERT_DIR"/*.pem "$CERT_DIR"/*.cer; do
+            if [ -f "$cert" ]; then
+                cp "$cert" /usr/local/share/ca-certificates/custom/
+            fi
+        done
+        update-ca-certificates >/dev/null 2>&1 || true
+        echo "[C-ICAP] System CA trust store updated successfully."
+    fi
+fi
 
 echo "[C-ICAP] Checking directories and permissions..."
 mkdir -p /var/run/c-icap /var/log/c-icap /tmp

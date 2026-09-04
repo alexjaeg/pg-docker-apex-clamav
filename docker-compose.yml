@@ -1,13 +1,15 @@
 # ==============================================================================
 # Docker Compose: Oracle Database 23ai, APEX 24.2, ORDS 24.3.0, ClamAV & C-ICAP
 # All images use specific, pinned version tags (NO :latest tags).
+# Centralized host download storage via ./dl.
+# Custom corporate & AI certificate support via ./cert across all services.
 # ==============================================================================
 
 name: apex-clamav-stack
 
 services:
   # ----------------------------------------------------------------------------
-  # 1. ClamAV Antivirus Daemon (Official Image)
+  # 1. ClamAV Antivirus Daemon (Official Image with Custom CA Support)
   # ----------------------------------------------------------------------------
   clamav:
     image: clamav/clamav:1.4.3
@@ -18,8 +20,11 @@ services:
     environment:
       - CLAMD_CONF_LogClean=yes
       - CLAMD_CONF_LogVerbose=yes
+    entrypoint: ["/bin/sh", "/clamav-entrypoint.sh"]
     volumes:
       - clamav_db:/var/lib/clamav
+      - ./cert:/cert:ro
+      - ./scripts/clamav-entrypoint.sh:/clamav-entrypoint.sh:ro
     networks:
       - apex-clamav-net
     healthcheck:
@@ -44,6 +49,8 @@ services:
     environment:
       - CLAMD_HOST=clamav
       - CLAMD_PORT=3310
+    volumes:
+      - ./cert:/cert:ro
     depends_on:
       clamav:
         condition: service_healthy
@@ -57,7 +64,7 @@ services:
       start_period: 10s
 
   # ----------------------------------------------------------------------------
-  # 3. One-Shot Helper: Download & Extract APEX Distribution
+  # 3. One-Shot Helper: Download Manager (Handles ./dl & Shared CA Bundle)
   # ----------------------------------------------------------------------------
   apex-download:
     image: debian:12.9-slim
@@ -65,20 +72,24 @@ services:
     user: "0"
     environment:
       - APEX_DOWNLOAD_URL=${APEX_DOWNLOAD_URL:-https://download.oracle.com/otn_software/apex/apex_24.2.zip}
+      - SQUIDCLAMAV_URL=${SQUIDCLAMAV_URL:-https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz}
     volumes:
+      - ./dl:/downloads
       - apex_files:/apex-files
-      - ./scripts/download-apex.sh:/scripts/download-apex.sh:ro
+      - ca_trust_pem:/ca-trust-bundle
+      - ./cert:/cert:ro
+      - ./scripts/download-manager.sh:/scripts/download-manager.sh:ro
     networks:
       - apex-clamav-net
     command: >
       bash -c "
         apt-get update -qq &&
         apt-get install -y -qq --no-install-recommends curl unzip ca-certificates >/dev/null &&
-        bash /scripts/download-apex.sh
+        bash /scripts/download-manager.sh
       "
 
   # ----------------------------------------------------------------------------
-  # 4. Oracle Database 23ai Free (Faststart)
+  # 4. Oracle Database 23ai Free (Faststart with Custom CA Support)
   # ----------------------------------------------------------------------------
   db:
     image: gvenzl/oracle-free:23.5-slim-faststart
@@ -96,6 +107,9 @@ services:
     volumes:
       - oradata:/opt/oracle/oradata
       - ./oracle-init:/container-entrypoint-initdb.d:ro
+      - ./scripts/import-certs-db.sh:/container-entrypoint-startdb.d/01_import_certs.sh:ro
+      - ca_trust_pem:/etc/pki/ca-trust/extracted/pem:ro
+      - ./cert:/cert:ro
       - apex_files:/apex:ro
     depends_on:
       apex-download:
@@ -129,6 +143,7 @@ services:
       - APEX_PWD=${APEX_PWD:-Welcome12345!2}
     volumes:
       - ords_config:/etc/ords/config
+      - ./cert:/cert:ro
       - apex_files:/opt/oracle/apex:ro
       - ./scripts/ords-entrypoint.sh:/ords-entrypoint.sh:ro
     entrypoint: ["/bin/bash", "/ords-entrypoint.sh"]
@@ -156,6 +171,8 @@ volumes:
     name: apex_clamav_db
   apex_files:
     name: apex_software_files
+  ca_trust_pem:
+    name: apex_ca_trust_pem
   oradata:
     name: apex_oracle_oradata
   ords_config:

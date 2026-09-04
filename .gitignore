@@ -7,6 +7,25 @@
 *.env.local
 .env.*.local
 
+# Private Keys & Sensitive Keystores (CRITICAL: Never commit private keys)
+*.key
+*.pem.key
+*.pfx
+*.p12
+*.jks
+
+# Custom Certificates folder (Ignore certificates, keep documentation & placeholders)
+cert/*
+!cert/README.md
+!cert/.gitkeep
+
+# Download folder (Ignore downloaded packages/archives, keep manifest & docs)
+dl/*
+!dl/README.md
+!dl/.gitkeep
+!dl/downloads.txt
+!dl/DOWNLOADS.md
+
 # Session & temporary test files
 cookies.txt
 *.log

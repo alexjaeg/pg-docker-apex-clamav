@@ -2,7 +2,7 @@
 
 [🇩🇪 Deutsch](README.md) | [🇬🇧 English](README_EN.md)
 
-Fully automated, containerized environment for **Oracle Database 23ai Free**, **Oracle APEX 24.2**, **Oracle REST Data Services (ORDS) 24.3.0**, **ClamAV 1.4.3**, and a **C-ICAP Server** with pure TCP network streaming and strict fail-closed security.
+Fully automated, containerized environment for **Oracle Database 23ai Free**, **Oracle APEX 24.2**, **Oracle REST Data Services (ORDS) 24.3.0**, **ClamAV 1.4.3**, and a **C-ICAP Server** with pure TCP network streaming, strict fail-closed security, centralized download management (`dl/`), and native custom corporate/AI certificate integration (`cert/`).
 
 ---
 
@@ -10,10 +10,15 @@ Fully automated, containerized environment for **Oracle Database 23ai Free**, **
 
 1. **No `latest` Tags**: All container and base images are pinned to specific, up-to-date, stable versions.
 2. **Strict Fail-Closed Security**: C-ICAP and ORDS are configured to **strictly block file uploads** if ClamAV is offline or unreachable (`Threat=ClamAV-Scanner-Offline`).
-3. **Horizontal Scalability**: C-ICAP communicates with ClamAV **strictly over the network via TCP (port 3310 / `INSTREAM`)** — zero shared filesystem volumes between C-ICAP and ClamAV.
-4. **Fully Automated Single-Command Initialization**:
+3. **Centralized Download Management (`dl/`)**: All required software packages are managed in the host directory [`dl/`](dl/).
+   - **Automatic**: Missing files are downloaded automatically by the download service.
+   - **Manual / Airgapped**: Files manually placed in `dl/` are recognized and used directly without re-downloading.
+   - **Manifest**: A complete list of URLs and commands is maintained in [`dl/downloads.txt`](dl/downloads.txt).
+4. **Custom Certificates & AI Support (`cert/`)**: Any certificates placed in the [`cert/`](cert/) directory (`.crt`, `.pem`, `.cer`) are automatically imported across all 5 containers (Oracle DB 23ai, ORDS/Java, C-ICAP, ClamAV, Downloader). Eliminates certificate validation errors (`ORA-29024` / `PKIX`) when calling internal AI services (LiteLLM, Ollama) or operating behind SSL interception proxies.
+5. **Horizontal Scalability**: C-ICAP communicates with ClamAV **strictly over the network via TCP (port 3310 / `INSTREAM`)** — zero shared filesystem volumes between C-ICAP and ClamAV.
+6. **Fully Automated Single-Command Initialization**:
    - The database initializes itself (`gvenzl/oracle-free:23.5-slim-faststart`).
-   - APEX downloads automatically and performs a silent install into the Pluggable Database (`FREEPDB1`).
+   - APEX installs into the Pluggable Database (`FREEPDB1`).
    - Demo Workspace (`DEMO`) and Administrator User (`DEMO_ADMIN`) are created automatically.
    - ORDS automatically configures the schemas, PL/SQL gateway, and ICAP antivirus integration.
    - All credentials and ports are managed centrally via `.env`.
@@ -35,6 +40,7 @@ Fully automated, containerized environment for **Oracle Database 23ai Free**, **
 |      |               ORDS 24.3.0 (Oracle REST Data Services)              |             |
 |      |  - Gateway proxy for APEX                                          |             |
 |      |  - ICAP client: intercepts uploads before DB persistence           |             |
+|      |  - Custom CAs in Java Keystore & OS trust store                    |             |
 |      +---------------------+------------------------------+---------------+             |
 |                            |                              |                             |
 |          JDBC (Port 1521)  |                              | ICAP (Port 1344)            |
@@ -45,14 +51,15 @@ Fully automated, containerized environment for **Oracle Database 23ai Free**, **
 |      |  - PDB: FREEPDB1               |    |  - Service: AVSCAN           |             |
 |      |  - APEX 24.2 pre-installed     |    |  - TCP streaming             |             |
 |      |  - Workspace: DEMO             |    +--------------+---------------+             |
-|      +--------------------------------+                   |                             |
-|                                                           | TCP Stream (Port 3310)      |
+|      |  - Shared CA bundle for AI/REST|                   |                             |
+|      +--------------------------------+                   | TCP Stream (Port 3310)      |
 |                                                           | (INSTREAM Protocol)         |
 |                                                           v                             |
 |                                            +--------------+---------------+             |
 |                                            |     ClamAV 1.4.3 Daemon      |             |
 |                                            |  - Official LTS image        |             |
 |                                            |  - Signature database        |             |
+|                                            |  - CA bundle for freshclam   |             |
 |                                            +------------------------------+             |
 +-----------------------------------------------------------------------------------------+
 ```
@@ -79,24 +86,24 @@ Copy `.env.example` to `.env` and adjust passwords if needed:
 cp .env.example .env
 ```
 
-### 2. Start the Stack
+### 2. Add Custom Certificates (Optional)
+If working behind a corporate proxy or connecting to local AI services (LiteLLM, Ollama):  
+Simply place your `.crt` or `.pem` files in the [`cert/`](cert/) directory.
+
+### 3. Provide Pre-Downloaded Files (Optional for Airgapped / Offline)
+If offline, place `apex_24.2.zip` directly into [`dl/`](dl/). See [`dl/downloads.txt`](dl/downloads.txt) for URLs.
+
+### 4. Start the Stack
 ```bash
 docker compose up -d
 ```
 
-### 3. What Happens Automatically in the Background:
-1. **`apex-download`**: Downloads the official APEX 24.2 distribution and extracts it into the volume `apex_software_files`.
-2. **`clamav`**: Starts the ClamAV daemon and opens TCP port 3310 with detailed logging (`LogClean=yes`).
-3. **`c-icap`**: Builds the C-ICAP container with the patched `squidclamav` module and connects via TCP to ClamAV.
-4. **`db`**: Starts Oracle Database 23ai Free. On first run, it executes `01_setup_users.sql` (schema `DEMO`, table `DEMO_FILES`) and `02_install_apex.sh` (silent APEX install in `FREEPDB1`, creates workspace `DEMO` and admin `DEMO_ADMIN`).
-5. **`ords`**: Sets up the PL/SQL gateway, enables ICAP integration (`c-icap:1344`), and mounts static APEX images (`/i/`).
-
-> **Note on Initial Setup**:  
-> The first-time APEX database installation takes approximately **3 to 5 minutes**.  
-> You can monitor the progress live:
-> ```bash
-> docker compose logs -f db ords
-> ```
+### 5. What Happens Automatically in the Background:
+1. **`apex-download`**: Checks `dl/`, downloads missing packages, generates `dl/downloads.txt`, builds the database CA bundle, and extracts APEX 24.2.
+2. **`clamav`**: Starts with imported CA certificates and detailed logging (`LogClean=yes`).
+3. **`c-icap`**: Builds the patched `squidclamav` module and connects via TCP to ClamAV.
+4. **`db`**: Starts Oracle Database 23ai Free with the augmented CA bundle. Runs `01_setup_users.sql` and `02_install_apex.sh`.
+5. **`ords`**: Imports certificates into Java's keystore (`cacerts`), configures the PL/SQL gateway and ICAP scanner.
 
 ---
 
@@ -113,19 +120,13 @@ All credentials are loaded from `.env` (template: `.env.example`):
 
 ---
 
-## 🧪 Testing Antivirus & Uploads
+## 🧪 Testing & Verification
 
-For detailed instructions and log tracking commands, see [**`test.md`**](test.md).
+Detailed step-by-step test guides are available in the [**test/**](test/) folder:
 
-### Quick Test Overview:
-
-* **Test 1: Clean File**: Checked by ClamAV (`instream: OK`), C-ICAP returns `204 No modification needed`, upload succeeds.
-* **Test 2: EICAR Test Virus**: Intercepted (`Eicar-Test-Signature FOUND`), C-ICAP sends `X-Infection-Found`, ORDS terminates the upload and prevents database persistence.
-* **Test 3: Fail-Closed (ClamAV Offline)**:
-  ```bash
-  docker compose stop clamav
-  ```
-  Attempting an upload triggers C-ICAP to report `Threat=ClamAV-Scanner-Offline`. ORDS immediately aborts the upload. **No file can bypass scanning!**
+* [**test/test-clamav.md**](test/test-clamav.md): Antivirus verification, live log tracing, and fail-closed test when ClamAV is stopped.
+* [**test/test-cert.md**](test/test-cert.md): Custom certificate verification (Corporate CA / LiteLLM / BadSSL) in Oracle DB 23ai, Java/ORDS, and ClamAV.
+* [**test/test-dl.md**](test/test-dl.md): Download manager, manual package placement, and manifest verification.
 
 ---
 
@@ -140,14 +141,6 @@ docker compose down -v
 # 2. Re-initialize everything from scratch with a single command:
 docker compose up -d
 ```
-
----
-
-## 📈 Horizontal Scaling
-
-Because C-ICAP uses pure TCP network streaming without shared filesystem volumes, you can scale ClamAV horizontally:
-1. Run multiple ClamAV replicas behind an internal load balancer or Docker DNS round-robin.
-2. In `c-icap/squidclamav.conf`, multiple backend IPs can be specified as a comma-separated list (`clamd_ip host1,host2`).
 
 ---
 
