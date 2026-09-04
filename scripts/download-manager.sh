@@ -12,11 +12,16 @@ APEX_TARGET_DIR="${APEX_TARGET_DIR:-/apex-files}"
 CERT_DIR="/cert"
 CA_BUNDLE_DIR="/ca-trust-bundle"
 
-APEX_URL="${APEX_DOWNLOAD_URL:-https://download.oracle.com/otn_software/apex/apex_24.2.zip}"
+APEX_VER="${APEX_VERSION:-26.1}"
+APEX_URL="${APEX_DOWNLOAD_URL:-https://download.oracle.com/otn_software/apex/apex_${APEX_VER}.zip}"
+APEX_FILE="apex_${APEX_VER}.zip"
+
 SQUIDCLAMAV_URL="${SQUIDCLAMAV_URL:-https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz}"
+SQUIDCLAMAV_FILE="squidclamav-7.3.tar.gz"
 
 echo "================================================================="
 echo "[DOWNLOAD-MGR] Starting Download Manager & Certificate Setup..."
+echo "[DOWNLOAD-MGR] Configured APEX Version: ${APEX_VER} (${APEX_FILE})"
 echo "================================================================="
 
 mkdir -p "${DOWNLOAD_DIR}"
@@ -62,7 +67,7 @@ if [ -d "$CERT_DIR" ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 2. Build shared CA trust bundle for Oracle Database 23ai
+# 2. Build shared CA trust bundle for Oracle Database
 # ------------------------------------------------------------------------------
 echo "[DOWNLOAD-MGR] Generating shared CA trust bundle for Oracle Database..."
 cp /etc/ssl/certs/ca-certificates.crt "$CA_BUNDLE_DIR/tls-ca-bundle.pem"
@@ -85,10 +90,8 @@ chmod 666 "$CA_BUNDLE_DIR/tls-ca-bundle.pem"
 echo "[DOWNLOAD-MGR] Shared DB CA bundle ready."
 
 # ------------------------------------------------------------------------------
-# 3. Generate Download Manifest (downloads.txt) in dl/
+# 3. Helper to check file status
 # ------------------------------------------------------------------------------
-MANIFEST_FILE="${DOWNLOAD_DIR}/downloads.txt"
-
 check_status() {
     if [ -f "$1" ]; then
         echo "PRESENT ($(du -h "$1" | cut -f1))"
@@ -97,7 +100,8 @@ check_status() {
     fi
 }
 
-cat << EOF > "${MANIFEST_FILE}"
+write_manifest() {
+    cat << EOF > "${DOWNLOAD_DIR}/downloads.txt"
 # ==============================================================================
 # Oracle APEX + ClamAV Stack - Download Manifest & Sources
 # ==============================================================================
@@ -106,83 +110,65 @@ cat << EOF > "${MANIFEST_FILE}"
 # ==============================================================================
 
 [APEX_DISTRIBUTION]
-FILE: apex_24.2.zip
-STATUS: $(check_status "${DOWNLOAD_DIR}/apex_24.2.zip")
-PURPOSE: Oracle APEX 24.2 Full Release (Database Application Express & Static Images)
+FILE: ${APEX_FILE}
+STATUS: $(check_status "${DOWNLOAD_DIR}/${APEX_FILE}")
+PURPOSE: Oracle APEX ${APEX_VER} Full Release (Database Application Express & Static Images)
 URL: ${APEX_URL}
-MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${APEX_URL}" -OutFile "dl\\apex_24.2.zip"
-MANUAL_COMMAND_CURL: curl -fsSL -o dl/apex_24.2.zip ${APEX_URL}
+MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${APEX_URL}" -OutFile "dl\\${APEX_FILE}"
+MANUAL_COMMAND_CURL: curl -fsSL -o dl/${APEX_FILE} ${APEX_URL}
 
 [SQUIDCLAMAV_SOURCE]
-FILE: squidclamav-7.3.tar.gz
-STATUS: $(check_status "${DOWNLOAD_DIR}/squidclamav-7.3.tar.gz")
+FILE: ${SQUIDCLAMAV_FILE}
+STATUS: $(check_status "${DOWNLOAD_DIR}/${SQUIDCLAMAV_FILE}")
 PURPOSE: SquidClamAV 7.3 Source Code (C-ICAP Antivirus & TCP Streaming Module)
 URL: ${SQUIDCLAMAV_URL}
-MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${SQUIDCLAMAV_URL}" -OutFile "dl\\squidclamav-7.3.tar.gz"
-MANUAL_COMMAND_CURL: curl -fsSL -o dl/squidclamav-7.3.tar.gz ${SQUIDCLAMAV_URL}
+MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${SQUIDCLAMAV_URL}" -OutFile "dl\\${SQUIDCLAMAV_FILE}"
+MANUAL_COMMAND_CURL: curl -fsSL -o dl/${SQUIDCLAMAV_FILE} ${SQUIDCLAMAV_URL}
 EOF
+}
+
+# Write initial manifest
+write_manifest
 
 # ------------------------------------------------------------------------------
 # 4. Handle SquidClamAV archive
 # ------------------------------------------------------------------------------
-SQUIDCLAMAV_FILE="${DOWNLOAD_DIR}/squidclamav-7.3.tar.gz"
-if [ -f "${SQUIDCLAMAV_FILE}" ]; then
-    echo "[DOWNLOAD-MGR] Found SquidClamAV archive: ${SQUIDCLAMAV_FILE} (Manual/Pre-downloaded)."
+SQUIDCLAMAV_PATH="${DOWNLOAD_DIR}/${SQUIDCLAMAV_FILE}"
+if [ -f "${SQUIDCLAMAV_PATH}" ]; then
+    echo "[DOWNLOAD-MGR] Found SquidClamAV archive: ${SQUIDCLAMAV_PATH} (Manual/Pre-downloaded)."
 else
     echo "[DOWNLOAD-MGR] Downloading SquidClamAV 7.3 from ${SQUIDCLAMAV_URL}..."
-    curl -L --fail --show-error --progress-bar -o "${SQUIDCLAMAV_FILE}" "${SQUIDCLAMAV_URL}"
+    curl -L --fail --show-error --progress-bar -o "${SQUIDCLAMAV_PATH}" "${SQUIDCLAMAV_URL}"
     echo "[DOWNLOAD-MGR] SquidClamAV download completed."
 fi
 
 # ------------------------------------------------------------------------------
-# 5. Handle Oracle APEX 24.2 archive
+# 5. Handle Oracle APEX archive
 # ------------------------------------------------------------------------------
-APEX_ZIP="${DOWNLOAD_DIR}/apex_24.2.zip"
-if [ -f "${APEX_ZIP}" ]; then
-    echo "[DOWNLOAD-MGR] Found APEX archive: ${APEX_ZIP} (Manual/Pre-downloaded)."
+APEX_ZIP_PATH="${DOWNLOAD_DIR}/${APEX_FILE}"
+if [ -f "${APEX_ZIP_PATH}" ]; then
+    echo "[DOWNLOAD-MGR] Found APEX archive: ${APEX_ZIP_PATH} (Manual/Pre-downloaded)."
 else
     echo "[DOWNLOAD-MGR] APEX archive missing in ${DOWNLOAD_DIR}. Downloading from ${APEX_URL}..."
-    curl -L --fail --show-error --progress-bar -o "${APEX_ZIP}" "${APEX_URL}"
+    curl -L --fail --show-error --progress-bar -o "${APEX_ZIP_PATH}" "${APEX_URL}"
     echo "[DOWNLOAD-MGR] APEX download completed."
 fi
 
-# Update manifest with new PRESENT status after download
-cat << EOF > "${MANIFEST_FILE}"
-# ==============================================================================
-# Oracle APEX + ClamAV Stack - Download Manifest & Sources
-# ==============================================================================
-# In Zero-Trust / Airgapped / Offline networks, manually download these files
-# and place them directly into this 'dl/' directory.
-# ==============================================================================
-
-[APEX_DISTRIBUTION]
-FILE: apex_24.2.zip
-STATUS: $(check_status "${DOWNLOAD_DIR}/apex_24.2.zip")
-PURPOSE: Oracle APEX 24.2 Full Release (Database Application Express & Static Images)
-URL: ${APEX_URL}
-MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${APEX_URL}" -OutFile "dl\\apex_24.2.zip"
-MANUAL_COMMAND_CURL: curl -fsSL -o dl/apex_24.2.zip ${APEX_URL}
-
-[SQUIDCLAMAV_SOURCE]
-FILE: squidclamav-7.3.tar.gz
-STATUS: $(check_status "${DOWNLOAD_DIR}/squidclamav-7.3.tar.gz")
-PURPOSE: SquidClamAV 7.3 Source Code (C-ICAP Antivirus & TCP Streaming Module)
-URL: ${SQUIDCLAMAV_URL}
-MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${SQUIDCLAMAV_URL}" -OutFile "dl\\squidclamav-7.3.tar.gz"
-MANUAL_COMMAND_CURL: curl -fsSL -o dl/squidclamav-7.3.tar.gz ${SQUIDCLAMAV_URL}
-EOF
+# Update manifest with final status
+write_manifest
 
 # ------------------------------------------------------------------------------
 # 6. Extract APEX into shared volume if needed
 # ------------------------------------------------------------------------------
-if [ -f "${APEX_TARGET_DIR}/apxsilentins.sql" ] && [ -d "${APEX_TARGET_DIR}/images" ]; then
-    echo "[DOWNLOAD-MGR] APEX files already extracted in ${APEX_TARGET_DIR}. Skipping extraction."
+VERSION_MARKER="${APEX_TARGET_DIR}/.apex_version_${APEX_VER}"
+if [ -f "${APEX_TARGET_DIR}/apxsilentins.sql" ] && [ -d "${APEX_TARGET_DIR}/images" ] && [ -f "${VERSION_MARKER}" ]; then
+    echo "[DOWNLOAD-MGR] APEX ${APEX_VER} files already extracted in ${APEX_TARGET_DIR}. Skipping extraction."
 else
-    echo "[DOWNLOAD-MGR] Extracting ${APEX_ZIP} into ${APEX_TARGET_DIR}..."
+    echo "[DOWNLOAD-MGR] Extracting ${APEX_ZIP_PATH} into ${APEX_TARGET_DIR}..."
     TEMP_EXTRACT="/tmp/apex_extract"
     rm -rf "${TEMP_EXTRACT}"
     mkdir -p "${TEMP_EXTRACT}"
-    unzip -q "${APEX_ZIP}" -d "${TEMP_EXTRACT}"
+    unzip -q "${APEX_ZIP_PATH}" -d "${TEMP_EXTRACT}"
 
     if [ ! -f "${TEMP_EXTRACT}/apex/apxsilentins.sql" ]; then
         echo "[DOWNLOAD-MGR] ERROR: apxsilentins.sql not found in downloaded archive!"
@@ -190,10 +176,12 @@ else
     fi
 
     echo "[DOWNLOAD-MGR] Moving extracted files to ${APEX_TARGET_DIR}..."
+    rm -f "${APEX_TARGET_DIR}/.apex_version_"* 2>/dev/null || true
     cp -r "${TEMP_EXTRACT}/apex"/* "${APEX_TARGET_DIR}/"
+    touch "${VERSION_MARKER}"
     chmod -R 755 "${APEX_TARGET_DIR}"
     rm -rf "${TEMP_EXTRACT}"
-    echo "[DOWNLOAD-MGR] APEX extraction complete."
+    echo "[DOWNLOAD-MGR] APEX ${APEX_VER} extraction complete."
 fi
 
 echo "================================================================="

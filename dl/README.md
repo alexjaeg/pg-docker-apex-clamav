@@ -17,10 +17,10 @@ In diesem Verzeichnis landen alle externen Software-Archive und Downloads, die f
    - Wenn dein Server keinen Internetzugang hat oder strenge Firewall-Regeln gelten, kannst du die Dateien vorab manuell herunterladen und direkt in diesen Ordner `dl/` legen.
    - Der Download-Service erkennt vorhandene Dateien automatisch und überspringt den Download!
 3. **Download-Übersichtsliste**:
-   - Die vollständige Liste aller Download-Quellen, Dateinamen und manuellen Download-Befehle findest du in [**`downloads.txt`**](downloads.txt) bzw. [**`DOWNLOADS.md`**](DOWNLOADS.md).
+   - Die vollständige Liste aller Download-Quellen, Dateinamen und manuellen Download-Befehle findest du in [**`downloads.txt`**](downloads.txt).
 
 ### Standard-Dateien in diesem Ordner:
-- `apex_24.2.zip`: Offizielle Oracle APEX 24.2 Distribution (~300 MB)
+- `apex_26.1.zip`: Offizielle Oracle APEX 26.1 Distribution (~326 MB)
 - `squidclamav-7.3.tar.gz`: SquidClamAV Quellcode-Archiv (~160 KB)
 
 ---
@@ -38,4 +38,4 @@ This directory contains all external software archives required by the stack.
    - You can manually download the required files and place them into this `dl/` directory before starting the stack.
    - The downloader service automatically detects existing files and skips downloading.
 3. **Manifest & Source List**:
-   - See [**`downloads.txt`**](downloads.txt) / [**`DOWNLOADS.md`**](DOWNLOADS.md) for full URLs and manual download commands.
+   - See [**`downloads.txt`**](downloads.txt) for full URLs and manual download commands.

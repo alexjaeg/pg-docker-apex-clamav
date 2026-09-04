@@ -2,26 +2,32 @@
 
 [🇩🇪 Deutsch](README.md) | [🇬🇧 English](README_EN.md)
 
-Fully automated, containerized environment for **Oracle Database 23ai Free**, **Oracle APEX 24.2**, **Oracle REST Data Services (ORDS) 24.3.0**, **ClamAV 1.4.3**, and a **C-ICAP Server** with pure TCP network streaming, strict fail-closed security, centralized download management (`dl/`), and native custom corporate/AI certificate integration (`cert/`).
+Fully automated, containerized environment for **Oracle Database 23ai Free (23.26.3)**, **Oracle APEX 26.1**, **Oracle REST Data Services (ORDS) 26.2.2**, **ClamAV 1.4.3**, and a **C-ICAP Server** with pure TCP network streaming, strict fail-closed security, centralized download management (`dl/`), and native custom corporate/AI certificate integration (`cert/`).
 
 ---
 
 ## 🌟 Highlights of this Solution
 
-1. **No `latest` Tags**: All container and base images are pinned to specific, up-to-date, stable versions.
-2. **Strict Fail-Closed Security**: C-ICAP and ORDS are configured to **strictly block file uploads** if ClamAV is offline or unreachable (`Threat=ClamAV-Scanner-Offline`).
-3. **Centralized Download Management (`dl/`)**: All required software packages are managed in the host directory [`dl/`](dl/).
+1. **No `latest` Tags**: All container and base images are pinned to specific, up-to-date, compatible versions.
+2. **Cutting-Edge Stack Versions**:
+   - **Oracle Database**: `23.26.3-slim-faststart` (Oracle Database 23ai Free)
+   - **Oracle APEX**: `26.1` (Latest release featuring APEXlang and AI assistant integrations)
+   - **Oracle REST Data Services (ORDS)**: `26.2.2` (Fully compatible with APEX 26.1)
+   - **ClamAV**: `1.4.3` (Latest LTS release)
+   - **C-ICAP**: `custom-c-icap:debian-12.9` with `squidclamav 7.3`
+3. **Strict Fail-Closed Security**: C-ICAP and ORDS are configured to **strictly block file uploads** if ClamAV is offline or unreachable (`Threat=ClamAV-Scanner-Offline`).
+4. **Centralized Download Management (`dl/`)**: All required software packages are managed in the host directory [`dl/`](dl/).
    - **Automatic**: Missing files are downloaded automatically by the download service.
    - **Manual / Airgapped**: Files manually placed in `dl/` are recognized and used directly without re-downloading.
    - **Manifest**: A complete list of URLs and commands is maintained in [`dl/downloads.txt`](dl/downloads.txt).
-4. **Custom Certificates & AI Support (`cert/`)**: Any certificates placed in the [`cert/`](cert/) directory (`.crt`, `.pem`, `.cer`) are automatically imported across all 5 containers (Oracle DB 23ai, ORDS/Java, C-ICAP, ClamAV, Downloader). Eliminates certificate validation errors (`ORA-29024` / `PKIX`) when calling internal AI services (LiteLLM, Ollama) or operating behind SSL interception proxies.
-5. **Horizontal Scalability**: C-ICAP communicates with ClamAV **strictly over the network via TCP (port 3310 / `INSTREAM`)** — zero shared filesystem volumes between C-ICAP and ClamAV.
-6. **Fully Automated Single-Command Initialization**:
-   - The database initializes itself (`gvenzl/oracle-free:23.5-slim-faststart`).
-   - APEX installs into the Pluggable Database (`FREEPDB1`).
+5. **Custom Certificates & AI Support (`cert/`)**: Any certificates placed in the [`cert/`](cert/) directory (`.crt`, `.pem`, `.cer`) are automatically imported across all 5 containers (Oracle DB 23ai, ORDS/Java, C-ICAP, ClamAV, Downloader). Eliminates certificate validation errors (`ORA-29024` / `PKIX`) when calling internal AI services (LiteLLM, Ollama) or operating behind SSL interception proxies.
+6. **Horizontal Scalability**: C-ICAP communicates with ClamAV **strictly over the network via TCP (port 3310 / `INSTREAM`)** — zero shared filesystem volumes between C-ICAP and ClamAV.
+7. **Fully Automated Single-Command Initialization**:
+   - The database initializes itself (`gvenzl/oracle-free:23.26.3-slim-faststart`).
+   - APEX 26.1 installs into the Pluggable Database (`FREEPDB1`).
    - Demo Workspace (`DEMO`) and Administrator User (`DEMO_ADMIN`) are created automatically.
-   - ORDS automatically configures the schemas, PL/SQL gateway, and ICAP antivirus integration.
-   - All credentials and ports are managed centrally via `.env`.
+   - ORDS 26.2.2 automatically configures the schemas, PL/SQL gateway, and ICAP antivirus integration.
+   - All credentials, versions, and ports are managed centrally via `.env`.
 
 ---
 
@@ -37,8 +43,8 @@ Fully automated, containerized environment for **Oracle Database 23ai Free**, **
 | Docker Compose Network: apex_clamav_network                                             |
 |                                                                                         |
 |      +--------------------------------------------------------------------+             |
-|      |               ORDS 24.3.0 (Oracle REST Data Services)              |             |
-|      |  - Gateway proxy for APEX                                          |             |
+|      |               ORDS 26.2.2 (Oracle REST Data Services)              |             |
+|      |  - Gateway proxy for APEX 26.1                                     |             |
 |      |  - ICAP client: intercepts uploads before DB persistence           |             |
 |      |  - Custom CAs in Java Keystore & OS trust store                    |             |
 |      +---------------------+------------------------------+---------------+             |
@@ -47,9 +53,9 @@ Fully automated, containerized environment for **Oracle Database 23ai Free**, **
 |                            v                              v                             |
 |      +---------------------+----------+    +--------------+---------------+             |
 |      |    Oracle DB 23ai Free         |    |      C-ICAP Server           |             |
-|      |    (23.5-slim-faststart)       |    |      (debian:12.9-slim)      |             |
+|      |    (23.26.3-slim-faststart)    |    |      (debian:12.9-slim)      |             |
 |      |  - PDB: FREEPDB1               |    |  - Service: AVSCAN           |             |
-|      |  - APEX 24.2 pre-installed     |    |  - TCP streaming             |             |
+|      |  - APEX 26.1 pre-installed     |    |  - TCP streaming             |             |
 |      |  - Workspace: DEMO             |    +--------------+---------------+             |
 |      |  - Shared CA bundle for AI/REST|                   |                             |
 |      +--------------------------------+                   | TCP Stream (Port 3310)      |
@@ -72,9 +78,9 @@ Fully automated, containerized environment for **Oracle Database 23ai Free**, **
 | :--- | :--- | :--- | :--- |
 | **ClamAV** | `clamav/clamav:1.4.3` | `1.4.3` (LTS) | Official antivirus daemon |
 | **C-ICAP** | `custom-c-icap:debian-12.9` | `debian:12.9-slim` | ICAP server with TCP streaming (`squidclamav 7.3`) |
-| **Oracle DB** | `gvenzl/oracle-free:23.5-slim-faststart` | `23.5` | Oracle Database 23ai Free |
-| **Oracle APEX** | Oracle CDN Archive | `24.2` | Low-code application platform |
-| **ORDS** | `container-registry.oracle.com/database/ords:24.3.0` | `24.3.0` | Web server & ICAP gateway |
+| **Oracle DB** | `gvenzl/oracle-free:23.26.3-slim-faststart` | `23.26.3` | Oracle Database 23ai Free (compatible with APEX 26.1) |
+| **Oracle APEX** | Oracle CDN Archive | `26.1` | Latest APEX low-code platform release |
+| **ORDS** | `container-registry.oracle.com/database/ords:26.2.2` | `26.2.2` | Web server & ICAP gateway |
 
 ---
 
@@ -91,7 +97,7 @@ If working behind a corporate proxy or connecting to local AI services (LiteLLM,
 Simply place your `.crt` or `.pem` files in the [`cert/`](cert/) directory.
 
 ### 3. Provide Pre-Downloaded Files (Optional for Airgapped / Offline)
-If offline, place `apex_24.2.zip` directly into [`dl/`](dl/). See [`dl/downloads.txt`](dl/downloads.txt) for URLs.
+If offline, place `apex_26.1.zip` directly into [`dl/`](dl/). See [`dl/downloads.txt`](dl/downloads.txt) for URLs.
 
 ### 4. Start the Stack
 ```bash
@@ -99,11 +105,11 @@ docker compose up -d
 ```
 
 ### 5. What Happens Automatically in the Background:
-1. **`apex-download`**: Checks `dl/`, downloads missing packages, generates `dl/downloads.txt`, builds the database CA bundle, and extracts APEX 24.2.
+1. **`apex-download`**: Checks `dl/`, downloads missing packages, generates `dl/downloads.txt`, builds the database CA bundle, and extracts APEX 26.1.
 2. **`clamav`**: Starts with imported CA certificates and detailed logging (`LogClean=yes`).
 3. **`c-icap`**: Builds the patched `squidclamav` module and connects via TCP to ClamAV.
-4. **`db`**: Starts Oracle Database 23ai Free with the augmented CA bundle. Runs `01_setup_users.sql` and `02_install_apex.sh`.
-5. **`ords`**: Imports certificates into Java's keystore (`cacerts`), configures the PL/SQL gateway and ICAP scanner.
+4. **`db`**: Starts Oracle Database 23ai Free (`23.26.3`) with the augmented CA bundle. Runs `01_setup_users.sql` and `02_install_apex.sh` (silent APEX 26.1 install).
+5. **`ords`**: Starts ORDS `26.2.2`, imports certificates into Java's keystore (`cacerts`), configures the PL/SQL gateway and ICAP scanner.
 
 ---
 
