@@ -24,6 +24,7 @@ services:
     volumes:
       - clamav_db:/var/lib/clamav
       - ./cert:/cert:ro
+      - ./dl:/downloads:ro
       - ./scripts/clamav-entrypoint.sh:/clamav-entrypoint.sh:ro
     networks:
       - apex-clamav-net
@@ -51,9 +52,12 @@ services:
       - CLAMD_PORT=3310
     volumes:
       - ./cert:/cert:ro
+      - ./dl:/downloads:ro
     depends_on:
       clamav:
         condition: service_healthy
+      apex-download:
+        condition: service_completed_successfully
     networks:
       - apex-clamav-net
     healthcheck:

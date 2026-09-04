@@ -2,12 +2,15 @@
 set -e
 
 # ==============================================================================
-# ClamAV Entrypoint Wrapper: Custom Corporate Certificate Importer
+# ClamAV Entrypoint Wrapper: Custom Corporate Certificate & Offline DB Importer
 # Ensures freshclam and clamd trust corporate SSL interception proxies
+# Supports offline virus definitions from ./dl
 # ==============================================================================
 
 CERT_DIR="/cert"
+DOWNLOAD_DIR="/downloads"
 
+# 1. Import custom certificates
 if [ -d "$CERT_DIR" ]; then
     count=0
     for cert in "$CERT_DIR"/*.crt "$CERT_DIR"/*.pem "$CERT_DIR"/*.cer; do
@@ -29,6 +32,17 @@ if [ -d "$CERT_DIR" ]; then
     else
         echo "[ClamAV] No custom certificates found in $CERT_DIR."
     fi
+fi
+
+# 2. Check for offline virus database files in ./dl
+if [ -d "$DOWNLOAD_DIR" ]; then
+    for cvd in "$DOWNLOAD_DIR"/*.cvd "$DOWNLOAD_DIR"/clamav/*.cvd; do
+        if [ -f "$cvd" ]; then
+            echo "[ClamAV] Found offline virus database: $(basename "$cvd"). Copying to /var/lib/clamav/..."
+            cp -f "$cvd" /var/lib/clamav/
+            chown clamav:clamav /var/lib/clamav/"$(basename "$cvd")" 2>/dev/null || true
+        fi
+    done
 fi
 
 # Hand over to original ClamAV entrypoint

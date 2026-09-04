@@ -4,6 +4,8 @@ set -e
 CLAMD_HOST="${CLAMD_HOST:-clamav}"
 CLAMD_PORT="${CLAMD_PORT:-3310}"
 CERT_DIR="/cert"
+DOWNLOAD_DIR="/downloads"
+MODULE_PATH="/usr/lib/c_icap/squidclamav.so"
 
 # 0. Import custom corporate certificates into system trust store
 if [ -d "$CERT_DIR" ]; then
@@ -27,9 +29,58 @@ if [ -d "$CERT_DIR" ]; then
     fi
 fi
 
+# 1. Build and install squidclamav module from local dl/ archive (Zero internet downloads)
+if [ ! -f "$MODULE_PATH" ]; then
+    echo "================================================================="
+    echo "[C-ICAP] Initializing squidclamav module from local archive in dl/..."
+    echo "================================================================="
+
+    ARCHIVE="${DOWNLOAD_DIR}/squidclamav-7.3.tar.gz"
+    if [ ! -f "$ARCHIVE" ]; then
+        echo "[C-ICAP] ERROR: SquidClamAV archive not found at ${ARCHIVE}!"
+        echo "[C-ICAP] Please ensure apex-download has run or manually place squidclamav-7.3.tar.gz in dl/."
+        exit 1
+    fi
+
+    echo "[C-ICAP] Unpacking ${ARCHIVE}..."
+    BUILD_DIR="/tmp/squidclamav_build"
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+    tar -xzf "$ARCHIVE" -C "$BUILD_DIR"
+
+    cd "$BUILD_DIR/squidclamav-7.3"
+
+    echo "[C-ICAP] Applying Fail-Closed security patch..."
+    python3 /etc/c-icap/patch_fail_closed.py
+
+    echo "[C-ICAP] Configuring and compiling squidclamav..."
+    ./configure --with-c-icap --sysconfdir=/etc/c-icap >/dev/null
+    make -j"$(nproc)" >/dev/null
+    make install >/dev/null
+
+    # Ensure module is installed in all standard Debian c-icap search paths
+    mkdir -p /usr/lib/c_icap /usr/share/c_icap/templates/squidclamav
+    cp -f /usr/local/c_icap/lib/c_icap/squidclamav.so /usr/lib/c_icap/squidclamav.so 2>/dev/null || \
+    cp -f src/.libs/squidclamav.so /usr/lib/c_icap/squidclamav.so 2>/dev/null || true
+
+    for libdir in /usr/lib/*-linux-gnu/c_icap; do
+        if [ -d "$libdir" ]; then
+            cp -f /usr/lib/c_icap/squidclamav.so "$libdir/" 2>/dev/null || true
+        fi
+    done
+
+    # Ensure templates are installed
+    if [ -d /usr/local/c_icap/share/c_icap/templates/squidclamav ]; then
+        cp -r /usr/local/c_icap/share/c_icap/templates/squidclamav/* /usr/share/c_icap/templates/squidclamav/ 2>/dev/null || true
+    fi
+
+    rm -rf "$BUILD_DIR"
+    echo "[C-ICAP] squidclamav module built and installed successfully from dl/!"
+fi
+
 echo "[C-ICAP] Checking directories and permissions..."
 mkdir -p /var/run/c-icap /var/log/c-icap /tmp
-chown -R c-icap:c-icap /var/run/c-icap /var/log/c-icap /tmp /etc/c-icap
+chown -R c-icap:c-icap /var/run/c-icap /var/log/c-icap /tmp /etc/c-icap /usr/share/c_icap/templates
 rm -f /var/run/c-icap/c-icap.pid /var/run/c-icap/c-icap.ctl
 
 # Dynamically update clamd_ip and clamd_port in squidclamav.conf
