@@ -7,16 +7,7 @@
 
 [APEX_DISTRIBUTION]
 FILE: apex_26.1.zip
-STATUS: PRESENT (311M)
 PURPOSE: Oracle APEX 26.1 Full Release (Database Application Express & Static Images)
 URL: https://download.oracle.com/otn_software/apex/apex_26.1.zip
 MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "https://download.oracle.com/otn_software/apex/apex_26.1.zip" -OutFile "dl\apex_26.1.zip"
 MANUAL_COMMAND_CURL: curl -fsSL -o dl/apex_26.1.zip https://download.oracle.com/otn_software/apex/apex_26.1.zip
-
-[SQUIDCLAMAV_SOURCE]
-FILE: squidclamav-7.3.tar.gz
-STATUS: PRESENT (432K)
-PURPOSE: SquidClamAV 7.3 Source Code (C-ICAP Antivirus & TCP Streaming Module)
-URL: https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz
-MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz" -OutFile "dl\squidclamav-7.3.tar.gz"
-MANUAL_COMMAND_CURL: curl -fsSL -o dl/squidclamav-7.3.tar.gz https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz

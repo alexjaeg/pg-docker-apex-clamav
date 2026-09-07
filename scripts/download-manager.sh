@@ -16,9 +16,6 @@ APEX_VER="${APEX_VERSION:-26.1}"
 APEX_URL="${APEX_DOWNLOAD_URL:-https://download.oracle.com/otn_software/apex/apex_${APEX_VER}.zip}"
 APEX_FILE="apex_${APEX_VER}.zip"
 
-SQUIDCLAMAV_URL="${SQUIDCLAMAV_URL:-https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz}"
-SQUIDCLAMAV_FILE="squidclamav-7.3.tar.gz"
-
 echo "================================================================="
 echo "[DOWNLOAD-MGR] Starting Download Manager & Certificate Setup..."
 echo "[DOWNLOAD-MGR] Configured APEX Version: ${APEX_VER} (${APEX_FILE})"
@@ -116,14 +113,6 @@ PURPOSE: Oracle APEX ${APEX_VER} Full Release (Database Application Express & St
 URL: ${APEX_URL}
 MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${APEX_URL}" -OutFile "dl\\${APEX_FILE}"
 MANUAL_COMMAND_CURL: curl -fsSL -o dl/${APEX_FILE} ${APEX_URL}
-
-[SQUIDCLAMAV_SOURCE]
-FILE: ${SQUIDCLAMAV_FILE}
-STATUS: $(check_status "${DOWNLOAD_DIR}/${SQUIDCLAMAV_FILE}")
-PURPOSE: SquidClamAV 7.3 Source Code (C-ICAP Antivirus & TCP Streaming Module)
-URL: ${SQUIDCLAMAV_URL}
-MANUAL_COMMAND_POWERSHELL: Invoke-WebRequest -Uri "${SQUIDCLAMAV_URL}" -OutFile "dl\\${SQUIDCLAMAV_FILE}"
-MANUAL_COMMAND_CURL: curl -fsSL -o dl/${SQUIDCLAMAV_FILE} ${SQUIDCLAMAV_URL}
 EOF
 }
 
@@ -131,19 +120,7 @@ EOF
 write_manifest
 
 # ------------------------------------------------------------------------------
-# 4. Handle SquidClamAV archive
-# ------------------------------------------------------------------------------
-SQUIDCLAMAV_PATH="${DOWNLOAD_DIR}/${SQUIDCLAMAV_FILE}"
-if [ -f "${SQUIDCLAMAV_PATH}" ]; then
-    echo "[DOWNLOAD-MGR] Found SquidClamAV archive: ${SQUIDCLAMAV_PATH} (Manual/Pre-downloaded)."
-else
-    echo "[DOWNLOAD-MGR] Downloading SquidClamAV 7.3 from ${SQUIDCLAMAV_URL}..."
-    curl -L --fail --show-error --progress-bar -o "${SQUIDCLAMAV_PATH}" "${SQUIDCLAMAV_URL}"
-    echo "[DOWNLOAD-MGR] SquidClamAV download completed."
-fi
-
-# ------------------------------------------------------------------------------
-# 5. Handle Oracle APEX archive
+# 4. Handle Oracle APEX archive
 # ------------------------------------------------------------------------------
 APEX_ZIP_PATH="${DOWNLOAD_DIR}/${APEX_FILE}"
 if [ -f "${APEX_ZIP_PATH}" ]; then
@@ -158,7 +135,7 @@ fi
 write_manifest
 
 # ------------------------------------------------------------------------------
-# 6. Extract APEX into shared volume if needed
+# 5. Extract APEX into shared volume if needed
 # ------------------------------------------------------------------------------
 VERSION_MARKER="${APEX_TARGET_DIR}/.apex_version_${APEX_VER}"
 if [ -f "${APEX_TARGET_DIR}/apxsilentins.sql" ] && [ -d "${APEX_TARGET_DIR}/images" ] && [ -f "${VERSION_MARKER}" ]; then

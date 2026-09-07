@@ -1,15 +1,15 @@
-# Testanleitung & Log-Verifikation (ClamAV & C-ICAP)
+# Testanleitung & Log-Verifikation (ClamAV & ICAP-Service)
 
-Diese Dokumentation beschreibt Schritt für Schritt, wie du Dateiuploads testen kannst und **in Echtzeit in den Logs nachverfolgst**, dass jede Datei durch **C-ICAP** und **ClamAV** geprüft wurde.
+Diese Dokumentation beschreibt Schritt für Schritt, wie du Dateiuploads testen kannst und **in Echtzeit in den Logs nachverfolgst**, dass jede Datei durch den **ICAP-Service** und **ClamAV** geprüft wurde.
 
 ---
 
 ## 📊 Wo und wie sehe ich die Prüfungen in den Logs?
 
 Jeder Dateiupload in Oracle APEX durchläuft die Kette:
-$$\text{Browser} \longrightarrow \text{ORDS} \overset{\text{ICAP}}{\longrightarrow} \text{C-ICAP} \overset{\text{TCP INSTREAM}}{\longrightarrow} \text{ClamAV}$$
+$$\text{Browser} \longrightarrow \text{ORDS} \overset{\text{ICAP}}{\longrightarrow} \text{ICAP-Service} \overset{\text{TCP INSTREAM}}{\longrightarrow} \text{ClamAV}$$
 
-Du kannst die Prüfung an drei Stellen lückenlos nachvollziehen:
+Du kannst die Prüfung lückenlos nachvollziehen:
 
 ### 1. ClamAV Daemon Log (Direkter Scan-Beweis)
 Im ClamAV-Container ist `LogClean=yes` und `LogVerbose=yes` aktiviert. ClamAV protokolliert **jeden einzelnen Stream-Scan**:
@@ -20,51 +20,41 @@ docker compose logs -f clamav
 
 * **Saubere Datei**:
   ```text
-  Wed Sep 2 20:26:49 2026 -> instream(172.18.0.4@45644): OK
+  instream(172.18.0.4@...): OK
   ```
-  *(Bedeutet: C-ICAP hat die Bytes über TCP gestreamt und ClamAV hat sie als sauber freigegeben.)*
+  *(Bedeutet: Der ICAP-Service hat die Bytes über TCP gestreamt und ClamAV hat sie als sauber freigegeben.)*
 * **Virendatei (EICAR)**:
   ```text
-  Wed Sep 2 20:26:55 2026 -> instream(172.18.0.4@58154): Eicar-Test-Signature FOUND
+  instream(172.18.0.4@...): Eicar-Test-Signature FOUND
   ```
 
 ---
 
-### 2. C-ICAP Server Log (Detaillierte Analyse)
-Im C-ICAP Container siehst du die Verbindung zu ClamAV und die Entscheidung:
+### 2. ICAP-Service Log (Echtzeit-Entscheidung)
+Im Container des ICAP-Services (`c-icap`) siehst du jeden Scan-Vorgang und die Fail-Closed-Entscheidung:
 
 ```bash
-docker exec -it apex-c-icap tail -f /var/log/c-icap/server.log
+docker compose logs -f c-icap
 ```
 
 * **Saubere Datei**:
   ```text
-  DEBUG Connected to Clamd (clamav:3310)
-  DEBUG Responding with allow 204
+  [INFO] [ICAP-Server] ClamAV scan completed (2150 bytes). Response: stream: OK
+  [INFO] [ICAP-Server] Scan result: CLEAN (Threat: None)
   ```
+  *(Antwortet mit `ICAP/1.0 204 No Content` -> Upload in APEX erlaubt)*
 * **Virendatei (EICAR)**:
   ```text
-  DEBUG Connected to Clamd (clamav:3310)
-  LOG Virus found in (null) ending download [stream: Eicar-Test-Signature FOUND]
-  LOG Virus found, sending redirection header / error page.
+  [INFO] [ICAP-Server] ClamAV scan completed (68 bytes). Response: stream: Eicar-Test-Signature FOUND
+  [INFO] [ICAP-Server] Scan result: INFECTED (Threat: Eicar-Test-Signature)
   ```
+  *(Antwortet mit `ICAP/1.0 200 OK` + `X-Infection-Found: Threat=Eicar-Test-Signature` + `HTTP 403 Forbidden` -> ORDS bricht Upload ab)*
 * **ClamAV ist offline (Fail-Closed Test)**:
   ```text
-  ERROR Can't connect to Clamd daemon. Enforcing FAIL-CLOSED.
-  LOG Virus found, sending redirection header / error page.
+  [ERROR] [ICAP-Server] Cannot connect to ClamAV daemon at clamav:3310: ...
+  [INFO] [ICAP-Server] Scan result: ERROR (Threat: ClamAV-Scanner-Offline)
   ```
-
----
-
-### 3. C-ICAP Access Log (Kompakte Transaktionsübersicht)
-Das Access-Log listet jeden HTTP/ICAP-Vorgang kompakt auf:
-
-```bash
-docker exec -it apex-c-icap tail -f /var/log/c-icap/access.log
-```
-
-* **Code `204`**: Datei geprüft und sauber (keine Modifikation nötig, Upload erlaubt).
-* **Code `200`**: Datei abgefangen und durch Block-Seite / `X-Infection-Found` ersetzt (Upload blockiert).
+  *(Erzwingt sofort `X-Infection-Found: Threat=ClamAV-Scanner-Offline` + `HTTP 403 Forbidden` -> Upload blockiert)*
 
 ---
 
@@ -84,26 +74,26 @@ docker compose logs -f clamav c-icap
    * **Workspace**: `DEMO`
    * **User**: `DEMO_ADMIN`
    * **Passwort**: `DemoPassword123!4`
-2. Lade eine Datei hoch (z. B. in einer APEX-Applikation oder über den SQL Workshop).
+2. Lade eine beliebige Datei hoch.
 3. **Beobachtung in den Logs**:
    * ClamAV meldet: `instream(...): OK`
-   * C-ICAP meldet: `RESPMOD ... 204`
+   * ICAP meldet: `Scan result: CLEAN`
    * Der Upload wird in APEX erfolgreich abgeschlossen.
 
 ---
 
 ### Test 2: Upload der EICAR-Testvirendatei (Blockiert)
-1. Erstelle eine Datei `eicar.txt` mit folgendem Standard-Teststring:
+1. Erstelle eine Testdatei `eicar.txt` mit folgendem Inhalt:
    ```text
    X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
    ```
 2. Versuche, diese Datei in APEX hochzuladen.
 3. **Beobachtung in den Logs**:
    * ClamAV meldet: `instream(...): Eicar-Test-Signature FOUND`
-   * C-ICAP generiert den Header:
+   * ICAP generiert:
      `X-Infection-Found: Type=0; Resolution=2; Threat=Eicar-Test-Signature;`
-   * ORDS fängt den Header ab und wirft `InfectedFileException`.
-   * **In APEX**: Der Upload bricht mit einem Fehler ab. Die Datei wird **nicht** in der Datenbank gespeichert!
+   * ORDS bricht den Upload mit `HTTP 403 Forbidden` ab.
+   * **In APEX**: Die Datei wird **nicht** in der Datenbank gespeichert!
 
 ---
 
@@ -114,32 +104,58 @@ docker compose logs -f clamav c-icap
    ```
 2. Versuche nun, eine **völlig harmlose, saubere Datei** in APEX hochzuladen.
 3. **Ergebnis**:
-   * C-ICAP erkennt den Verbindungsausfall zu ClamAV sofort.
-   * C-ICAP erzwingt den Fail-Closed-Schutz und generiert:
+   * ICAP erkennt den Ausfall von ClamAV sofort.
+   * ICAP erzwingt den Fail-Closed-Schutz und generiert:
      `X-Infection-Found: Type=0; Resolution=2; Threat=ClamAV-Scanner-Offline;`
-   * ORDS erkennt die Bedrohungsmeldung und bricht den Upload sofort ab.
-   * **Der Upload ist unmöglich, solange ClamAV nicht läuft!**
+   * ORDS bricht den Upload sofort ab.
+   * **Dateiuploads sind strikt verboten, solange ClamAV nicht erreichbar ist!**
 4. Starte ClamAV wieder:
    ```powershell
    docker compose start clamav
    ```
-   Sobald ClamAV wieder läuft, funktionieren reguläre Uploads wieder.
 
 ---
 
 ## ⚡ Schneller Kommandozeilen-Test (Ohne Browser)
 
-Du kannst alle drei Tests auch direkt per Befehl gegen C-ICAP ausführen:
+Du kannst alle drei Tests direkt über PowerShell ausführen:
 
 ```powershell
-# 1. Saubere Datei prüfen
-docker exec apex-c-icap c-icap-client -i 127.0.0.1 -p 1344 -s "AVSCAN" -f /etc/c-icap/c-icap.conf
+# 1. Saubere Datei prüfen (Antwort: ICAP/1.0 204 No Content)
+python -c "
+import socket
+s = socket.create_connection(('127.0.0.1', 1344), timeout=5)
+http = b'POST /ords/test HTTP/1.1\r\nHost: localhost\r\n\r\n'
+body = b'Clean file test'
+chunk = f'{len(body):x}\r\n'.encode() + body + b'\r\n0\r\n\r\n'
+s.sendall(f'REQMOD icap://127.0.0.1:1344/avscan ICAP/1.0\r\nHost: 127.0.0.1\r\nAllow: 204\r\nEncapsulated: req-hdr=0, req-body={len(http)}\r\n\r\n'.encode('latin1') + http + chunk)
+print(s.recv(1024).decode('latin1').split('\r\n')[0])
+s.close()
+"
 
-# 2. EICAR-Virus prüfen
-docker exec apex-c-icap sh -c "echo 'WDVPIVAlQEFQWzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCo=' | base64 -d > /tmp/eicar.com && c-icap-client -i 127.0.0.1 -p 1344 -s 'AVSCAN' -f /tmp/eicar.com"
+# 2. EICAR-Virus prüfen (Antwort: 403 Forbidden & Threat=Eicar-Test-Signature)
+python -c "
+import socket, base64
+s = socket.create_connection(('127.0.0.1', 1344), timeout=5)
+http = b'POST /ords/test HTTP/1.1\r\nHost: localhost\r\n\r\n'
+eicar = base64.b64decode('WDVPIVAlQEFQWzRcUFpYNTQoUF4pN0NDKTd9JEVJQ0FSLVNUQU5EQVJELUFOVElWSVJVUy1URVNULUZJTEUhJEgrSCo=')
+chunk = f'{len(eicar):x}\r\n'.encode() + eicar + b'\r\n0\r\n\r\n'
+s.sendall(f'REQMOD icap://127.0.0.1:1344/avscan ICAP/1.0\r\nHost: 127.0.0.1\r\nAllow: 204\r\nEncapsulated: req-hdr=0, req-body={len(http)}\r\n\r\n'.encode('latin1') + http + chunk)
+print(s.recv(4096).decode('latin1'))
+s.close()
+"
 
-# 3. ClamAV stoppen und Fail-Closed verifizieren
+# 3. Fail-Closed verifizieren (ClamAV gestoppt)
 docker stop apex-clamav
-docker exec apex-c-icap c-icap-client -i 127.0.0.1 -p 1344 -s "AVSCAN" -f /etc/c-icap/c-icap.conf
+python -c "
+import socket
+s = socket.create_connection(('127.0.0.1', 1344), timeout=5)
+http = b'POST /ords/test HTTP/1.1\r\nHost: localhost\r\n\r\n'
+body = b'Clean file while offline'
+chunk = f'{len(body):x}\r\n'.encode() + body + b'\r\n0\r\n\r\n'
+s.sendall(f'REQMOD icap://127.0.0.1:1344/avscan ICAP/1.0\r\nHost: 127.0.0.1\r\nAllow: 204\r\nEncapsulated: req-hdr=0, req-body={len(http)}\r\n\r\n'.encode('latin1') + http + chunk)
+print(s.recv(4096).decode('latin1'))
+s.close()
+"
 docker start apex-clamav
 ```

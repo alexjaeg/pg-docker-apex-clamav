@@ -21,7 +21,6 @@ In diesem Verzeichnis landen alle externen Software-Archive und Downloads, die f
 
 ### Standard-Dateien in diesem Ordner:
 - `apex_26.1.zip`: Offizielle Oracle APEX 26.1 Distribution (~326 MB)
-- `squidclamav-7.3.tar.gz`: SquidClamAV Quellcode-Archiv (~160 KB)
 
 ---
 

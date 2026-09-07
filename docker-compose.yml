@@ -1,8 +1,9 @@
 # ==============================================================================
-# Docker Compose: Oracle Database 23ai, APEX 26.1, ORDS 26.2.2, ClamAV & C-ICAP
+# Docker Compose: Oracle Database 23ai, APEX 26.1, ORDS 26.2.2, ClamAV & ICAP
 # All images use specific, pinned version tags (NO :latest tags).
 # Centralized host download storage via ./dl.
 # Custom corporate & AI certificate support via ./cert across all services.
+# Pure native Linux packages (Debian python3) - Zero third-party C dependencies
 # ==============================================================================
 
 name: apex-clamav-stack
@@ -36,13 +37,13 @@ services:
       start_period: 25s
 
   # ----------------------------------------------------------------------------
-  # 2. C-ICAP Server with SquidClamav Streaming Module (TCP INSTREAM - No Volumes)
+  # 2. Native Antivirus ICAP Service (RFC 3507 TCP Streaming - No Shared Volumes)
   # ----------------------------------------------------------------------------
   c-icap:
     build:
       context: ./c-icap
       dockerfile: Dockerfile
-    image: custom-c-icap:debian-12.9
+    image: custom-icap:debian-12.9
     container_name: apex-c-icap
     restart: unless-stopped
     ports:
@@ -50,14 +51,13 @@ services:
     environment:
       - CLAMD_HOST=clamav
       - CLAMD_PORT=3310
+      - ICAP_PORT=1344
+      - SERVICE_NAME=avscan
     volumes:
       - ./cert:/cert:ro
-      - ./dl:/downloads:ro
     depends_on:
       clamav:
         condition: service_healthy
-      apex-download:
-        condition: service_completed_successfully
     networks:
       - apex-clamav-net
     healthcheck:
@@ -65,7 +65,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 5s
 
   # ----------------------------------------------------------------------------
   # 3. One-Shot Helper: Download Manager (Handles ./dl & Shared CA Bundle)
@@ -77,7 +77,6 @@ services:
     environment:
       - APEX_VERSION=${APEX_VERSION:-26.1}
       - APEX_DOWNLOAD_URL=${APEX_DOWNLOAD_URL:-https://download.oracle.com/otn_software/apex/apex_26.1.zip}
-      - SQUIDCLAMAV_URL=${SQUIDCLAMAV_URL:-https://github.com/darold/squidclamav/archive/refs/tags/v7.3.tar.gz}
     volumes:
       - ./dl:/downloads
       - apex_files:/apex-files
