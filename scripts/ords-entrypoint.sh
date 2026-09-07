@@ -100,6 +100,7 @@ echo "[ORDS] Configuring PL/SQL Gateway & ICAP Virus Scanner integration..."
 /opt/oracle/ords/bin/ords --config "${CONFIG_DIR}" config --db-pool default set plsql.gateway.mode proxied || true
 /opt/oracle/ords/bin/ords --config "${CONFIG_DIR}" config set icap.server "${ICAP_HOST}"
 /opt/oracle/ords/bin/ords --config "${CONFIG_DIR}" config set icap.port "${ICAP_PORT}"
+/opt/oracle/ords/bin/ords --config "${CONFIG_DIR}" config set icap.prview false || true
 /opt/oracle/ords/bin/ords --config "${CONFIG_DIR}" config set standalone.static.context.path "/i"
 /opt/oracle/ords/bin/ords --config "${CONFIG_DIR}" config set standalone.static.path "/opt/oracle/apex/images"
 

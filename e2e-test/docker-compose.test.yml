@@ -1,0 +1,25 @@
+services:
+  e2e-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: apex-e2e-test
+    environment:
+      - BASE_URL=http://ords:8080
+      - APEX_WORKSPACE=DEMO
+      - APEX_USER=DEMO_ADMIN
+      - APEX_PASSWORD=DemoPassword123!4
+      - TEST_FILES_DIR=/test-files
+      - EICAR_FILE_NAME=eicar.txt
+      - CLEAN_FILE_NAME=clean_sample.txt
+    volumes:
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+      - ${TEST_FILES_DIR:-D:/_AVFree_}:/test-files:ro
+    networks:
+      - default
+
+networks:
+  default:
+    name: apex-clamav-stack_apex-clamav-net
+    external: true

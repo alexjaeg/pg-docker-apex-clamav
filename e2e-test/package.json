@@ -1,0 +1,29 @@
+{
+  "name": "apex-clamav-e2e-tests",
+  "version": "1.0.0",
+  "description": "Playwright End-to-End Tests for Oracle APEX + ClamAV + ICAP Antivirus Verification",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:clean": "playwright test -g \"Clean file\"",
+    "test:eicar": "playwright test -g \"EICAR\"",
+    "test:fail-closed": "playwright test -g \"Fail-Closed\""
+  },
+  "keywords": [
+    "playwright",
+    "oracle-apex",
+    "clamav",
+    "icap",
+    "e2e-tests"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.13.0",
+    "dotenv": "^16.4.7",
+    "typescript": "^5.7.3"
+  }
+}

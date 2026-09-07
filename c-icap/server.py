@@ -190,6 +190,10 @@ async def handle_client(reader, writer):
                     encapsulated_http_headers = b""
                     chunked_body = payload_buffer
 
+                # Check if this request is using ICAP Preview (RFC 3507)
+                preview_val = headers.get('preview')
+                is_preview = preview_val is not None
+
                 # Read and de-chunk ICAP body
                 # ICAP chunks are: <hex-size>[;extensions]\r\n<data>\r\n ... 0\r\n\r\n
                 body_chunks = []
@@ -216,11 +220,21 @@ async def handle_client(reader, writer):
                         break
 
                     if chunk_size == 0:
-                        # End of chunks. Consume trailing \r\n
+                        # Consume trailing \r\n
                         buffer = rest
                         if buffer.startswith(b"\r\n"):
                             buffer = buffer[2:]
-                        break
+
+                        # If this was a preview chunk and NOT the entire file (no ieof):
+                        if is_preview and b"ieof" not in size_line.lower():
+                            logger.info(f"Preview received ({sum(len(c) for c in body_chunks)} bytes). Requesting remainder with 100 Continue...")
+                            writer.write(b"ICAP/1.0 100 Continue\r\n\r\n")
+                            await writer.drain()
+                            is_preview = False  # Next 0-chunk terminates the full message body
+                            continue
+                        else:
+                            # End of chunks (either non-preview or preview with ieof)
+                            break
 
                     # Read chunk_size bytes + trailing \r\n
                     needed = chunk_size + 2

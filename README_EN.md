@@ -130,6 +130,7 @@ All credentials are loaded from `.env` (template: `.env.example`):
 
 Detailed step-by-step test guides are available in the [**test/**](test/) folder:
 
+* [**e2e-test/**](e2e-test/): Automated browser end-to-end testing with Playwright (clean upload, EICAR blocking, fail-closed protection).
 * [**test/test-clamav.md**](test/test-clamav.md): Antivirus verification, live log tracing, and fail-closed test when ClamAV is stopped.
 * [**test/test-cert.md**](test/test-cert.md): Custom certificate verification (Corporate CA / LiteLLM / BadSSL) in Oracle DB 23ai, Java/ORDS, and ClamAV.
 * [**test/test-dl.md**](test/test-dl.md): Download manager, manual package placement, and manifest verification.

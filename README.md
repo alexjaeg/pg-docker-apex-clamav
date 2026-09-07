@@ -137,6 +137,7 @@ Alle Zugangsdaten werden aus der Datei `.env` geladen (Vorlage: `.env.example`):
 
 Ausführliche Anleitungen findest du im Ordner [**test/**](test/):
 
+* [**e2e-test/**](e2e-test/): Automatisierte Browser-End-to-End Tests mit Playwright (Clean Upload, EICAR-Blockade, Fail-Closed Schutz).
 * [**test/test-clamav.md**](test/test-clamav.md): Virenscanner-Verifikation, Log-Nachverfolgung und Fail-Closed-Test bei gestopptem ClamAV.
 * [**test/test-cert.md**](test/test-cert.md): Verifikation eigener Zertifikate (Corporate CA / LiteLLM / BadSSL) in Oracle DB 23ai, Java/ORDS und ClamAV.
 * [**test/test-dl.md**](test/test-dl.md): Download-Manager, manuelle Bereitstellung und Manifest-Prüfung.
